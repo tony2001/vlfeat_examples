@@ -1,0 +1,216 @@
+dnl this files has to be processed by autoconf
+AC_PREREQ(2.61)
+
+AC_INIT([vlfeat_examples],[0.0.1])
+AM_INIT_AUTOMAKE([no-define silent-rules])
+AC_CONFIG_HEADERS([src/vlfeat_examples_config.h])
+AM_MAINTAINER_MODE
+
+dnl Checks for programs.
+AC_PROG_CC
+AC_PROG_LD
+
+dnl we don't need C++ compiler
+undefine([AC_PROG_CXX])
+AC_DEFUN([AC_PROG_CXX], [])
+undefine([AC_PROG_CXXCPP])
+AC_DEFUN([AC_PROG_CXXCPP], [dummy_cxxcpp=disabled])
+
+AM_PROG_LIBTOOL
+AC_PROG_INSTALL
+
+STANDARD_PREFIXES="/usr /usr/local /opt /local"
+
+dnl {{{ --with-libdir
+AC_ARG_WITH(libdir,
+  [AS_HELP_STRING([--with-libdir],[look for libraries in .../NAME rather than .../lib])
+  ],
+  [LIBDIR=$with_libdir],
+  [LIBDIR=lib]
+)
+dnl }}}
+
+dnl {{{ --disable-rpath
+AC_ARG_ENABLE(rpath,
+  [AS_HELP_STRING([--disable-rpath],[disable passing additional runtime library search paths])
+  ],
+  [VLE_RPATH=no],
+  [VLE_RPATH=yes]
+)
+dnl }}}
+
+dnl {{{ check for rpath support
+AC_MSG_CHECKING([if compiler supports -R])
+AC_CACHE_VAL(pinba_cv_cc_dashr,[
+  SAVE_LIBS=$LIBS
+  LIBS="-R /usr/$LIBDIR $LIBS"
+  AC_TRY_LINK([], [], pinba_cv_cc_dashr=yes, pinba_cv_cc_dashr=no)
+  LIBS=$SAVE_LIBS])
+AC_MSG_RESULT([$pinba_cv_cc_dashr])
+if test $pinba_cv_cc_dashr = "yes"; then
+  ld_runpath_switch=-R
+else
+  AC_MSG_CHECKING([if compiler supports -Wl,-rpath,])
+  AC_CACHE_VAL(pinba_cv_cc_rpath,[
+    SAVE_LIBS=$LIBS
+    LIBS="-Wl,-rpath,/usr/$LIBDIR $LIBS"
+    AC_TRY_LINK([], [], pinba_cv_cc_rpath=yes, pinba_cv_cc_rpath=no)
+    LIBS=$SAVE_LIBS])
+  AC_MSG_RESULT([$pinba_cv_cc_rpath])
+  if test $pinba_cv_cc_rpath = "yes"; then
+    ld_runpath_switch=-Wl,-rpath,
+  else
+    ld_runpath_switch=-L
+  fi
+fi
+if test "$VLE_RPATH" = "no"; then
+  ld_runpath_switch=
+fi
+dnl }}}
+
+dnl {{{ --with-vlfeat
+AC_ARG_WITH(vlfeat,
+  [AS_HELP_STRING([--with-vlfeat],[specify VLFeat install prefix])
+  ],
+  [ ],
+  [with_vlfeat=yes]
+)
+
+if test "x$with_vlfeat" = "xno"; then
+  AC_MSG_ERROR([can't continue without VLFeat])
+else
+  AC_MSG_CHECKING([VLFeat install prefix])
+
+  if test "x$with_vlfeat" = "xyes"; then
+    for i in `echo "$STANDARD_PREFIXES"`; do
+      if test -f "$i/include/vl/generic.h"; then
+        VLFEAT_DIR="$i"
+        break;
+      fi
+    done
+  else
+
+    with_vlfeat=`dir_resolve "$with_vlfeat"`
+
+    if test -f "$with_vlfeat/include/vl/generic.h"; then
+      VLFEAT_DIR="$with_vlfeat"
+    else
+      AC_MSG_ERROR([Can't find VLFeat headers under $with_vlfeat directory])
+    fi
+  fi
+
+  if test "x$VLFEAT_DIR" = "x"; then
+    AC_MSG_ERROR([Unable to locate VLFeat headers, please use --with-vlfeat=<DIR>])
+  fi
+
+  AC_MSG_RESULT([$VLFEAT_DIR])
+  LDFLAGS="$LDFLAGS -L$VLFEAT_DIR/$LIBDIR"
+  LIBS="$LIBS -lvl"
+  CFLAGS="$CFLAGS -I$VLFEAT_DIR/include"
+
+  if test "$VLE_RPATH" != "no"; then
+    LDFLAGS="$LDFLAGS $ld_runpath_switch$VLFEAT_DIR/$LIBDIR"
+  fi
+
+  AC_CHECK_LIB([vl], [vl_sift_new], [], [
+    AC_MSG_ERROR([vl_sift_new() is missing. Check config.log for more details])
+  ])
+fi
+
+dnl }}}
+
+dnl {{{ --with-spindle
+AC_ARG_WITH(spindle,
+  [AS_HELP_STRING([--with-spindle],[specify libspindle install prefix])
+  ],
+  [ ],
+  [with_spindle=yes]
+)
+
+if test "x$with_spindle" = "xno"; then
+  AC_MSG_WARN([Continuing without libspindle and multithreaded examples..])
+else
+  AC_MSG_CHECKING([libspindle install prefix])
+
+  if test "x$with_spindle" = "xyes"; then
+    for i in `echo "$STANDARD_PREFIXES"`; do
+      if test -f "$i/include/spindle.h"; then
+        LIBSPINDLE_DIR="$i"
+        break;
+      fi
+    done
+  else
+
+    with_spindle=`dir_resolve "$with_spindle"`
+
+    if test -f "$with_spindle/include/spindle.h"; then
+      LIBSPINDLE_DIR="$with_spindle"
+    else
+      AC_MSG_ERROR([Can't find libspindle headers under $with_spindle directory])
+    fi
+  fi
+
+  if test "x$LIBSPINDLE_DIR" = "x"; then
+    AC_MSG_RESULT([not found])
+    AC_MSG_WARN([Unable to locate libspindle headers, please use --with-spindle=<DIR>])
+    AC_MSG_WARN([Continuing without libspindle and multithreaded examples..])
+  else 
+    AC_MSG_RESULT([$LIBSPINDLE_DIR])
+    LDFLAGS="$LDFLAGS -L$LIBSPINDLE_DIR/$LIBDIR"
+    LIBS="$LIBS -lspindle"
+    CFLAGS="$CFLAGS -I$LIBSPINDLE_DIR/include"
+
+    if test "$VLE_RPATH" != "no"; then
+      LDFLAGS="$LDFLAGS $ld_runpath_switch$LIBSPINDLE_DIR/$LIBDIR"
+    fi
+
+    AC_CHECK_LIB([spindle], [spindle_create], [], [
+      AC_MSG_ERROR([spindle_create() is missing. Check config.log for more details])
+    ])
+  fi
+fi
+
+AM_CONDITIONAL([HAVE_LIBSPINDLE], [test "x$LIBSPINDLE_DIR" != "x"])
+
+dnl }}}
+
+dnl --enable-debug {{{
+AC_ARG_ENABLE(debug,
+  [AS_HELP_STRING([--enable-debug],[enable debugging symbols and compile flags])
+  ],
+  [
+    if test x"$enableval" = xyes ; then
+      debug="yes"
+    else
+      debug="no"
+    fi
+  ]
+)
+
+if test x"$debug" = xyes ; then
+  AC_DEFINE([_DEBUG], [], [debug build])
+
+  if test x"$GCC" = xyes; then
+
+    dnl Remove any optimization flags from CFLAGS
+    changequote({,})
+    CFLAGS=`echo "$CFLAGS" | sed -e 's/-O[0-9s]*//g'`
+    CFLAGS=`echo "$CFLAGS" | sed -e 's/-g[0-2]\? //g'`
+    changequote([,])
+    CFLAGS="$CFLAGS -g3 -Wall -O0"
+
+  fi
+
+  dnl Do not strip symbols from developer object files.
+  INSTALL_STRIP_FLAG=""
+else
+  dnl Make sure to strip symbols from non-developer object files.
+  INSTALL_STRIP_FLAG="-s"
+fi
+dnl }}}
+
+AC_SUBST(INSTALL_STRIP_FLAG)
+
+AC_CONFIG_FILES([Makefile src/Makefile])
+AC_OUTPUT
+
